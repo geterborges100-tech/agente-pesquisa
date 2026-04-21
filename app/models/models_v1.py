@@ -62,3 +62,47 @@ class Conversation(Base):
     ended_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+
+
+# =========================
+# Sprint 5 — Consent + Audit
+# =========================
+
+from sqlalchemy.dialects.postgresql import JSONB as _JSONB
+
+
+class Consent(Base):
+    __tablename__ = "consents"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    contact_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    conversation_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    legal_basis: Mapped[str] = mapped_column(String(32), nullable=False, server_default="consent")
+    purpose: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    channel_message_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    event: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    actor: Mapped[str] = mapped_column(String(32), nullable=False)
+    entity: Mapped[str] = mapped_column(String(32), nullable=False)
+    entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    criticality: Mapped[str] = mapped_column(String(8), nullable=False)
+    conversation_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    context: Mapped[Optional[dict]] = mapped_column(_JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()"), index=True
+    )
