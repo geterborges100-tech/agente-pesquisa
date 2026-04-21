@@ -1,6 +1,8 @@
 """
 app/services/evolution_webhook_service.py
 Processa eventos recebidos da Evolution API v2.3.7.
+from app.repositories.consent_repository import ConsentRepository
+from app.services.guardrail_validator import GuardrailValidator
 
 Diferenças fundamentais em relação ao webhook_service.py (Meta oficial):
 - Payload completamente diferente (ver parse abaixo)
@@ -222,6 +224,8 @@ class EvolutionWebhookService:
         ai_engine: "AIEngine | None" = None,
     ) -> None:
         self._db = db
+        self.consent_repo = ConsentRepository(db)
+        self.guardrail = GuardrailValidator()
         self._evolution_api_key = evolution_api_key
         self._account_id = account_id
         self._conversation_svc = conversation_service or ConversationService()
@@ -296,6 +300,14 @@ class EvolutionWebhookService:
             if self._ai_engine is not None and msg.raw_text:
                 try:
                     contact = self._db.get(Contact, contact_id)
+                    # --- CONSENT GATE (LGPD) ---
+                    if not self._handle_consent_logic(contact, msg.raw_text, conversation.id):
+                        from app.services.evolution_outbound import EvolutionOutboundService
+                        outbound = EvolutionOutboundService(self._evolution_api_key)
+                        consent_msg = "Olá! Antes de continuarmos, você autoriza o processamento dos seus dados para este atendimento? (Responda Sim ou Não)"
+                        outbound.send_text(contact.phone, consent_msg)
+                        return {"status": "awaiting_consent", "message_id": msg.external_message_id}
+                    # ---------------------------
                     self._ai_engine.process_inbound(
                         conversation=conversation,
                         contact_phone=msg.sender_phone,
@@ -384,3 +396,36 @@ class EvolutionWebhookService:
             "type": "text",
             "text": {"body": msg.raw_text or ""},
         }
+
+    def _handle_consent_logic(self, contact, text_content: str, conversation_id) -> bool:
+        """
+        Retorna True se a conversa pode prosseguir para a IA.
+        Retorna False se o fluxo de consentimento interceptou a mensagem.
+        """
+        # 1. Verifica se já tem consentimento 'granted'
+        if self.consent_repo.has_granted(contact_id=contact.id, type="lgpd"):
+            return True
+
+        # 2. Se não tem consentimento, verifica se a mensagem atual é uma resposta ao pedido
+        clean_text = text_content.strip().lower()
+        
+        if clean_text in ["sim", "aceito", "concordo"]:
+            self.consent_repo.create(
+                contact_id=contact.id,
+                conversation_id=conversation_id,
+                type="lgpd",
+                status="granted",
+                purpose="atendimento_geral"
+            )
+            return True
+            
+        if clean_text in ["não", "nao", "recuso"]:
+            self.consent_repo.create(
+                contact_id=contact.id,
+                conversation_id=conversation_id,
+                type="lgpd",
+                status="denied"
+            )
+            return False 
+
+        return False
