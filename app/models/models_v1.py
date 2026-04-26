@@ -106,3 +106,31 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()"), index=True
     )
+
+from enum import Enum
+from pydantic import BaseModel
+from typing import Optional, List, Any
+
+class NodeType(str, Enum):
+    RESEARCHER = "researcher"
+    WRITER = "writer"
+    VALIDATOR = "validator"
+    ROUTER = "router"
+
+class Node(BaseModel):
+    id: str
+    type: NodeType
+    content: Optional[str] = None
+    metadata: Optional[dict] = None
+
+class ConversationStatus(str, Enum):
+    OPEN = "open"
+    CLOSED = "closed"
+    WAITING_CONSENT = "waiting_consent"
+    ARCHIVED = "archived"
+
+class ConversationStatus(str, Enum):
+    OPEN = "open"
+    CLOSED = "closed"
+    WAITING_CONSENT = "waiting_consent"
+    ARCHIVED = "archived"

@@ -1,7 +1,7 @@
 import logging
 from typing import Optional, Dict, Any
-from app.models.conversations import Conversation, ConversationStatus
-from app.models.nodes import Node, NodeType
+from app.models.models_v1 import Conversation
+from app.models.models_v1 import Node, NodeType, ConversationStatus
 from app.services.prompt_builder import PromptBuilder
 from app.services.llm_client import LLMClient
 from app.services.state_machine import StateMachine

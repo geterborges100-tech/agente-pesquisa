@@ -1,7 +1,10 @@
+from __future__ import annotations
+from app.repositories.consent_repository import ConsentRepository
+from app.repositories.contacts import ContactRepository
+from app.repositories.conversations import ConversationRepository
 """
 app/services/evolution_webhook_service.py
 Processa eventos recebidos da Evolution API v2.3.7.
-from app.repositories.consent_repository import ConsentRepository
 from app.services.guardrail_validator import GuardrailValidator
 
 Diferenças fundamentais em relação ao webhook_service.py (Meta oficial):
@@ -26,7 +29,6 @@ Payload Evolution MESSAGES_UPSERT (referência Sprint 1):
 }
 """
 
-from __future__ import annotations
 
 import logging
 import uuid
@@ -39,7 +41,6 @@ from sqlalchemy.orm import Session
 
 from app.models.event import EventStatus, WebhookEvent
 from app.models.models_v1 import Contact
-from app.repositories.contact_repository import ContactRepository
 from app.services.conversation_service import ConversationService
 
 if TYPE_CHECKING:
