@@ -1,10 +1,6 @@
 """
 app/routers/webhooks.py
 Rotas de webhook — Meta oficial e Evolution API separados.
-
-GET  /webhooks/meta/instagram        → handshake Meta (mantido em main.py)
-POST /webhooks/meta/instagram        → eventos Meta (mantido em main.py)
-POST /webhooks/evolution/whatsapp    → eventos Evolution API v2.3.7
 """
 
 from __future__ import annotations
@@ -20,13 +16,14 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.services.ai_engine import AIEngine
 from app.services.conversation_service import ConversationService
-from app.services.evolution_outbound import EvolutionOutboundClient, OutboundError
+from app.services.evolution_outbound import EvolutionOutboundClient
 from app.services.evolution_webhook_service import (
     EvolutionAuthError,
     EvolutionPayloadError,
     EvolutionWebhookService,
 )
 from app.services.llm_client import LLMClient
+from app.services.prompt_builder import PromptBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -37,27 +34,14 @@ ACCOUNT_ID = uuid.UUID(os.getenv("ACCOUNT_ID", "00000000-0000-0000-0000-00000000
 
 
 def _build_ai_engine(db: Session) -> AIEngine | None:
-    """
-    Instancia o AIEngine com LLMClient configurado para OpenRouter + Gemini,
-    se as variáveis de ambiente necessárias estiverem configuradas.
-    Retorna None em caso de configuração ausente (fallback silencioso).
-    """
+    """Instancia o AIEngine com LLMClient e PromptBuilder."""
+
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
+    openrouter_model = os.environ.get("LLM_MODEL", "google/gemini-2.0-flash-001")
     openrouter_base = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-    openrouter_model = os.environ.get("OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
-    evolution_base = os.environ.get("EVOLUTION_BASE_URL", "")
-    evolution_instance = os.environ.get("EVOLUTION_INSTANCE", "Provedor_CRM")
 
     if not openrouter_key:
-        logger.warning(
-            "[webhooks_router] OPENROUTER_API_KEY não definida — AIEngine desabilitado."
-        )
-        return None
-
-    if not evolution_base:
-        logger.warning(
-            "[webhooks_router] EVOLUTION_BASE_URL não definida — AIEngine desabilitado."
-        )
+        logger.warning("[webhooks_router] OPENROUTER_API_KEY não definida — AIEngine desabilitado.")
         return None
 
     try:
@@ -66,12 +50,8 @@ def _build_ai_engine(db: Session) -> AIEngine | None:
             base_url=openrouter_base,
             model=openrouter_model,
         )
-        outbound = EvolutionOutboundClient(
-            base_url=evolution_base,
-            api_key=EVOLUTION_API_KEY,
-            instance=evolution_instance,
-        )
-        return AIEngine(db=db, llm_client=llm, outbound_client=outbound)
+        prompt_builder = PromptBuilder(objective="Pesquisa de mercado conversacional")
+        return AIEngine(llm_client=llm, prompt_builder=prompt_builder)
     except Exception as exc:
         logger.warning("[webhooks_router] Falha ao criar AIEngine: %s", exc)
         return None
@@ -97,12 +77,6 @@ async def receive_evolution_webhook(
     apikey: str | None = Header(None, alias="apikey"),
     evolution_service: EvolutionWebhookService = Depends(get_evolution_service),
 ) -> JSONResponse:
-    """
-    Recebe eventos MESSAGES_UPSERT da Evolution API.
-
-    Segurança: valida header `apikey` configurado em EVOLUTION_API_KEY.
-    A Evolution API envia este header em todas as requisições de webhook.
-    """
     try:
         payload = await request.json()
     except Exception:
