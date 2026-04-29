@@ -34,14 +34,12 @@ ACCOUNT_ID = uuid.UUID(os.getenv("ACCOUNT_ID", "00000000-0000-0000-0000-00000000
 
 
 def _build_ai_engine(db: Session) -> AIEngine | None:
-    """Instancia o AIEngine com LLMClient e PromptBuilder."""
-
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
     openrouter_model = os.environ.get("LLM_MODEL", "google/gemini-2.0-flash-001")
     openrouter_base = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 
     if not openrouter_key:
-        logger.warning("[webhooks_router] OPENROUTER_API_KEY não definida — AIEngine desabilitado.")
+        logger.warning("[webhooks_router] OPENROUTER_API_KEY não definida.")
         return None
 
     try:
@@ -86,7 +84,7 @@ async def receive_evolution_webhook(
         )
 
     try:
-        result = evolution_service.process_event(
+        result = await evolution_service.process_event(
             payload=payload,
             api_key_header=apikey,
         )

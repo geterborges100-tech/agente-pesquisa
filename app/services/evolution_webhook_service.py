@@ -131,7 +131,7 @@ class EvolutionWebhookService:
         self._guardrail = GuardrailValidator()
         self._ai_engine = ai_engine
 
-    def process_event(self, *, payload: dict[str, Any], api_key_header: str | None) -> dict[str, Any]:
+    async def process_event(self, *, payload: dict[str, Any], api_key_header: str | None) -> dict[str, Any]:
         validate_evolution_api_key(received_key=api_key_header, expected_key=self._evolution_api_key)
         msg = parse_evolution_payload(payload)
 
@@ -162,11 +162,10 @@ class EvolutionWebhookService:
                     contact = self._db.get(Contact, contact_id)
                     if not self._handle_consent_logic(contact, msg.raw_text, conversation.id):
                         return {"status": "awaiting_consent", "message_id": msg.external_message_id}
-                    self._ai_engine.process_inbound(
+                    await self._ai_engine.process_inbound(
                         conversation=conversation,
-                        contact_phone=msg.sender_phone,
-                        inbound_text=msg.raw_text,
-                        account_id=contact.account_id,
+                        message_text=msg.raw_text,
+                        script={},
                     )
                 except Exception as ai_exc:
                     logger.exception("[Evolution] AIEngine falhou: %s", ai_exc)
