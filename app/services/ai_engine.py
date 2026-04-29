@@ -119,13 +119,13 @@ class AIEngine:
         Salva a mensagem recebida como parte do histórico da conversa.
         """
         from app.repositories.messages import create_message
-        from app.models.messages import MessageDirection, SenderType
+        
 
         await create_message(
             conversation_id=conversation.id,
             contact_id=conversation.contact_id,
-            direction=MessageDirection.INBOUND,
-            sender_type=SenderType.CONTACT,
+            direction="inbound",
+            sender_type="contact",
             raw_text=message_text,
             normalized_text=message_text.strip().lower(),
         )

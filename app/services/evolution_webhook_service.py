@@ -6,6 +6,7 @@ Processa eventos recebidos da Evolution API v2.3.7.
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -19,6 +20,7 @@ from app.models.models_v1 import Contact
 from app.repositories.consent_repository import ConsentRepository
 from app.repositories.contact_repository import ContactRepository
 from app.services.conversation_service import ConversationService
+from app.services.evolution_outbound import EvolutionOutboundClient
 from app.services.guardrail_validator import GuardrailValidator
 
 if TYPE_CHECKING:
@@ -162,11 +164,20 @@ class EvolutionWebhookService:
                     contact = self._db.get(Contact, contact_id)
                     if not self._handle_consent_logic(contact, msg.raw_text, conversation.id):
                         return {"status": "awaiting_consent", "message_id": msg.external_message_id}
-                    await self._ai_engine.process_inbound(
+
+                    result = await self._ai_engine.process_inbound(
                         conversation=conversation,
                         message_text=msg.raw_text,
                         script={},
                     )
+                    if result and result.get("outbound_text"):
+                        try:
+                            outbound = EvolutionOutboundClient()
+                            outbound.send_text(number=msg.sender_phone, text=result["outbound_text"])
+                            logger.info("[Evolution] Outbound enviado: %s", result["outbound_text"][:50])
+                        except Exception as e:
+                            logger.error("[Evolution] Falha outbound: %s", e)
+
                 except Exception as ai_exc:
                     logger.exception("[Evolution] AIEngine falhou: %s", ai_exc)
 
