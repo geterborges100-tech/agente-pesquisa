@@ -6,3 +6,5 @@ pycache/
 venv/
 .pytest_cache/
 *.log
+ssh-key-*
+local/

@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -20,7 +20,7 @@ class Message(Base):
     """
     Representa uma mensagem individual dentro de uma Conversation.
 
-    direction   : "inbound"  (contact → sistema) | "outbound" (sistema → contact)
+    direction   : "inbound"  (contact -> sistema) | "outbound" (sistema -> contact)
     sender_type : "contact" | "ai" | "human_agent" | "system"
     """
 
@@ -72,7 +72,7 @@ class Handoff(Base):
 
 
 class ResearchScript(Base):
-    """Roteiro de pesquisa. status: draft → active → archived."""
+    """Roteiro de pesquisa. status: draft -> active -> archived."""
 
     __tablename__ = "research_scripts"
 
@@ -123,26 +123,10 @@ class LLMConfig(Base):
     """
     Configuração do provedor LLM por conta.
 
-    Permite trocar modelo/provider/chave sem alterar código — basta
-    atualizar o registro no banco e reiniciar o container.
-
-    Campos
-    ------
-    account_id   : UUID da conta
-    provider     : identificador do provedor, ex: "openrouter", "anthropic", "openai"
-    base_url     : URL base da API (OpenAI-compatible), ex: "https://openrouter.ai/api/v1"
-    model        : identificador do modelo, ex: "google/gemini-2.0-flash-001"
-    api_key      : chave de API (armazenada em texto — proteger acesso ao banco)
-    max_tokens   : limite de tokens na resposta (padrão: 512)
-    is_active    : apenas um registro ativo por account_id deve existir
-    notes        : campo livre para documentar a configuração (provider, motivo, etc.)
-
-    Para trocar de modelo/provider
-    --------------------------------
-    UPDATE llm_configs SET is_active = false WHERE account_id = '<id>' AND is_active = true;
-    INSERT INTO llm_configs (account_id, provider, base_url, model, api_key, notes)
-    VALUES ('<id>', 'openrouter', 'https://openrouter.ai/api/v1', 'novo/modelo', 'sk-...', 'motivo');
-    -- Depois reiniciar o container para recarregar a config.
+    Para trocar de modelo/provider:
+        UPDATE llm_configs SET is_active = false WHERE account_id = '<id>' AND is_active = true;
+        INSERT INTO llm_configs (account_id, provider, base_url, model, api_key, notes)
+        VALUES ('<id>', 'openrouter', 'https://openrouter.ai/api/v1', 'novo/modelo', 'sk-...', 'motivo');
     """
 
     __tablename__ = "llm_configs"
@@ -167,4 +151,37 @@ class LLMConfig(Base):
         DateTime(timezone=True),
         nullable=False,
         server_default=text("now()"),
+    )
+
+
+# ============================================================
+# NOVO — Sprint 5+: Agentes Pesquisadores
+# ============================================================
+
+class ResearchAgent(Base):
+    """
+    Agente pesquisador humano que pode receber handoffs.
+
+    phone  : número no formato E.164, ex: +5561999990001
+    active : False = desativado (não recebe novos handoffs)
+
+    Para desativar um agente sem apagar o histórico:
+        UPDATE research_agents SET active = false WHERE id = '<uuid>';
+    """
+
+    __tablename__ = "research_agents"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    phone: Mapped[str] = mapped_column(
+        String(20), nullable=False, unique=True
+        # Formato E.164: +55 + DDD + número, ex: +5561999990001
+    )
+    active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
