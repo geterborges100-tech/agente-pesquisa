@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.event import EventStatus, WebhookEvent
-from app.models.models_v1 import Contact
+from app.models.models_v1 import Contact, Conversation
 from app.repositories.consent_repository import ConsentRepository
 from app.repositories.contact_repository import ContactRepository
 from app.services.conversation_service import ConversationService
@@ -32,7 +32,7 @@ class EvolutionPayloadError(ValueError):
 
 
 class EvolutionAuthError(PermissionError):
-    """API Key ausente ou invalida."""
+    """API Key ausente ou inválida."""
 
 
 @dataclass
@@ -67,7 +67,7 @@ def _extract_text_from_evolution(data: dict[str, Any]) -> str | None:
 def parse_evolution_payload(payload: dict[str, Any]) -> NormalizedMessage:
     event = payload.get("event", "")
     if event != "messages.upsert":
-        raise EvolutionPayloadError(f"Evento nao suportado: {event!r}.")
+        raise EvolutionPayloadError(f"Evento não suportado: {event!r}.")
 
     instance = payload.get("instance")
     if not instance:
@@ -106,7 +106,7 @@ def validate_evolution_api_key(*, received_key: str | None, expected_key: str) -
     if not received_key:
         raise EvolutionAuthError("Header 'apikey' ausente.")
     if received_key != expected_key:
-        raise EvolutionAuthError("Header 'apikey' invalido.")
+        raise EvolutionAuthError("Header 'apikey' inválido.")
 
 
 class EvolutionWebhookService:
@@ -159,8 +159,9 @@ class EvolutionWebhookService:
             if self._ai_engine is not None and msg.raw_text:
                 try:
                     contact = self._db.get(Contact, contact_id)
-                    if not self._handle_consent_logic(contact, msg.raw_text, conversation.id):
-                        return {"status": "awaiting_consent", "message_id": msg.external_message_id}
+                    consent_result = self._handle_consent_logic(contact, msg.raw_text, conversation.id)
+                    if consent_result is not None:
+                        return {**consent_result, "message_id": msg.external_message_id}
 
                     await self._ai_engine.process_inbound(
                         db=self._db,
@@ -218,9 +219,14 @@ class EvolutionWebhookService:
             "text": {"body": msg.raw_text or ""},
         }
 
-    def _handle_consent_logic(self, contact, text_content: str, conversation_id: uuid.UUID) -> bool:
+    def _handle_consent_logic(self, contact, text_content: str, conversation_id: uuid.UUID) -> dict | None:
+        """
+        Retorna None se o fluxo pode prosseguir para IA.
+        Retorna um dict com status e reason se a mensagem foi interceptada
+        (consentimento pendente, negado, etc.).
+        """
         if self._consent_repo.has_granted(contact_id=contact.id, type="lgpd"):
-            return True
+            return None
 
         clean_text = text_content.strip().lower()
 
@@ -232,7 +238,7 @@ class EvolutionWebhookService:
                 status="granted",
                 purpose="atendimento_geral",
             )
-            return True
+            return None
 
         if clean_text in ["não", "nao", "recuso"]:
             self._consent_repo.create(
@@ -241,6 +247,10 @@ class EvolutionWebhookService:
                 type="lgpd",
                 status="denied",
             )
-            return False
+            conv = self._db.get(Conversation, conversation_id)
+            if conv:
+                conv.status = "closed"
+                self._db.flush()
+            return {"status": "consent_denied", "reason": "user_refused"}
 
-        return False
+        return {"status": "awaiting_consent"}
