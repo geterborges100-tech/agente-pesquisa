@@ -1,34 +1,9 @@
-from __future__ import annotations
-from app.repositories.consent_repository import ConsentRepository
-from app.repositories.contacts import ContactRepository
-from app.repositories.conversations import ConversationRepository
-"""
+﻿"""
 app/services/evolution_webhook_service.py
 Processa eventos recebidos da Evolution API v2.3.7.
-from app.services.guardrail_validator import GuardrailValidator
-
-Diferenças fundamentais em relação ao webhook_service.py (Meta oficial):
-- Payload completamente diferente (ver parse abaixo)
-- Sem assinatura HMAC confiável — validação via API_KEY header
-- remoteJid no formato "556199990000@s.whatsapp.net"
-
-Payload Evolution MESSAGES_UPSERT (referência Sprint 1):
-{
-  "event": "messages.upsert",
-  "instance": "Provedor_CRM",
-  "data": {
-    "key": {
-      "remoteJid": "556199990000@s.whatsapp.net",
-      "fromMe": false,
-      "id": "WAMID123"
-    },
-    "message": {"conversation": "Olá, tudo bem?"},
-    "pushName": "Nome do Contato",
-    "messageTimestamp": 1713312000
-  }
-}
 """
 
+from __future__ import annotations
 
 import logging
 import uuid
@@ -41,72 +16,44 @@ from sqlalchemy.orm import Session
 
 from app.models.event import EventStatus, WebhookEvent
 from app.models.models_v1 import Contact
+from app.repositories.consent_repository import ConsentRepository
+from app.repositories.contact_repository import ContactRepository
 from app.services.conversation_service import ConversationService
+from app.services.guardrail_validator import GuardrailValidator
 
 if TYPE_CHECKING:
-    # Import apenas para type-checking — evita import circular em runtime
     from app.services.ai_engine import AIEngine
 
 logger = logging.getLogger(__name__)
 
 
-# ----
-# Exceções
-# ----
-
-
 class EvolutionPayloadError(ValueError):
-    """Payload Evolution malformado ou campo obrigatório ausente."""
+    """Payload Evolution malformado."""
 
 
 class EvolutionAuthError(PermissionError):
-    """API Key ausente ou inválida."""
-
-
-# ----
-# Modelo normalizado interno
-# ----
+    """API Key ausente ou invalida."""
 
 
 @dataclass
 class NormalizedMessage:
-    """Representação interna — independente do provider."""
-    external_message_id: str   # key.id  (WAMID)
-    sender_phone: str          # remoteJid sem sufixo "@s.whatsapp.net"
-    from_me: bool              # key.fromMe
-    push_name: str | None      # pushName
-    raw_text: str | None       # texto extraído de qualquer tipo suportado
-    timestamp: datetime        # messageTimestamp → UTC
-    instance: str              # nome da instância Evolution
-
-
-# ----
-# Parser do payload Evolution
-# ----
+    external_message_id: str
+    sender_phone: str
+    from_me: bool
+    push_name: str | None
+    raw_text: str | None
+    timestamp: datetime
+    instance: str
 
 
 def _clean_jid(remote_jid: str) -> str:
-    """Remove sufixo '@s.whatsapp.net' e similares."""
     return remote_jid.split("@")[0]
 
 
 def _extract_text_from_evolution(data: dict[str, Any]) -> str | None:
-    """
-    Extrai texto de todos os tipos de mensagem suportados pela Evolution API.
-
-    Tipos mapeados:
-    - conversation              → mensagem de texto simples
-    - extendedTextMessage.text  → texto com preview de link
-    - imageMessage.caption      → legenda de imagem
-    - videoMessage.caption      → legenda de vídeo
-    - documentMessage.caption   → legenda de documento
-    - audioMessage              → None (sem texto)
-    - stickerMessage            → None
-    """
     msg = data.get("message", {})
     if not msg:
         return None
-
     if "conversation" in msg:
         return msg["conversation"]
     if "extendedTextMessage" in msg:
@@ -118,19 +65,9 @@ def _extract_text_from_evolution(data: dict[str, Any]) -> str | None:
 
 
 def parse_evolution_payload(payload: dict[str, Any]) -> NormalizedMessage:
-    """
-    Converte payload Evolution MESSAGES_UPSERT → NormalizedMessage.
-
-    Raises
-    ----
-    EvolutionPayloadError
-        Se campos obrigatórios estiverem ausentes.
-    """
     event = payload.get("event", "")
     if event != "messages.upsert":
-        raise EvolutionPayloadError(
-            f"Evento não suportado: {event!r}. Esperado: 'messages.upsert'."
-        )
+        raise EvolutionPayloadError(f"Evento nao suportado: {event!r}.")
 
     instance = payload.get("instance")
     if not instance:
@@ -139,24 +76,20 @@ def parse_evolution_payload(payload: dict[str, Any]) -> NormalizedMessage:
     data = payload.get("data", {})
     key = data.get("key", {})
 
-    remote_jid: str | None = key.get("remoteJid")
+    remote_jid = key.get("remoteJid")
     if not remote_jid:
         raise EvolutionPayloadError("Campo 'data.key.remoteJid' ausente.")
 
-    message_id: str | None = key.get("id")
+    message_id = key.get("id")
     if not message_id:
         raise EvolutionPayloadError("Campo 'data.key.id' ausente.")
 
-    from_me: bool = bool(key.get("fromMe", False))
-    push_name: str | None = data.get("pushName")
-
+    from_me = bool(key.get("fromMe", False))
+    push_name = data.get("pushName")
     raw_text = _extract_text_from_evolution(data)
 
     ts = data.get("messageTimestamp")
-    if ts:
-        timestamp = datetime.fromtimestamp(int(ts), tz=timezone.utc)
-    else:
-        timestamp = datetime.now(tz=timezone.utc)
+    timestamp = datetime.fromtimestamp(int(ts), tz=timezone.utc) if ts else datetime.now(tz=timezone.utc)
 
     return NormalizedMessage(
         external_message_id=message_id,
@@ -169,51 +102,15 @@ def parse_evolution_payload(payload: dict[str, Any]) -> NormalizedMessage:
     )
 
 
-# ----
-# Validação de API Key (Evolution não usa HMAC)
-# ----
-
-
-def validate_evolution_api_key(
-    *,
-    received_key: str | None,
-    expected_key: str,
-) -> None:
-    """
-    Valida o header 'apikey' enviado pela Evolution API.
-
-    A Evolution API v2 envia o header `apikey` com o valor configurado
-    em EVOLUTION_API_KEY no .env. Não há assinatura HMAC.
-
-    Raises
-    ----
-    EvolutionAuthError
-        Se a chave estiver ausente ou não coincidir.
-    """
+def validate_evolution_api_key(*, received_key: str | None, expected_key: str) -> None:
     if not received_key:
         raise EvolutionAuthError("Header 'apikey' ausente.")
     if received_key != expected_key:
-        raise EvolutionAuthError("Header 'apikey' inválido.")
-
-
-# ----
-# EvolutionWebhookService
-# ----
+        raise EvolutionAuthError("Header 'apikey' invalido.")
 
 
 class EvolutionWebhookService:
-    """
-    Processa eventos MESSAGES_UPSERT recebidos da Evolution API v2.3.7.
-
-    Pipeline:
-    1. Valida API Key.
-    2. Parse do payload → NormalizedMessage.
-    3. Filtra mensagens enviadas pela própria instância (fromMe=True).
-    4. Idempotência via external_event_id na tabela webhook_events.
-    5. Upsert do Contact.
-    6. ConversationService persiste a mensagem e retorna a Conversation.
-    7. AIEngine processa a resposta (se injetado e mensagem tiver texto).
-    """
+    """Processa eventos MESSAGES_UPSERT recebidos da Evolution API v2.3.7."""
 
     def __init__(
         self,
@@ -225,59 +122,29 @@ class EvolutionWebhookService:
         ai_engine: "AIEngine | None" = None,
     ) -> None:
         self._db = db
-        self.consent_repo = ConsentRepository(db)
-        self.guardrail = GuardrailValidator()
         self._evolution_api_key = evolution_api_key
         self._account_id = account_id
         self._conversation_svc = conversation_service or ConversationService()
         self._contact_repo = ContactRepository(db)
-        # AIEngine é opcional — permite rodar o webhook sem o motor de IA
+        self._consent_repo = ConsentRepository(db)
+        self._guardrail = GuardrailValidator()
         self._ai_engine = ai_engine
 
-    # ----
-    # Entrypoint público
-    # ----
-
-    def process_event(
-        self,
-        *,
-        payload: dict[str, Any],
-        api_key_header: str | None,
-    ) -> dict[str, Any]:
-        """
-        Processa um evento da Evolution API.
-
-        Returns
-        ----
-        dict com resultado: status, message_id, skipped (bool).
-        """
-        # 1. Autenticação
-        validate_evolution_api_key(
-            received_key=api_key_header,
-            expected_key=self._evolution_api_key,
-        )
-
-        # 2. Parse
+    async def process_event(self, *, payload: dict[str, Any], api_key_header: str | None) -> dict[str, Any]:
+        validate_evolution_api_key(received_key=api_key_header, expected_key=self._evolution_api_key)
         msg = parse_evolution_payload(payload)
 
-        # 3. Filtrar próprias mensagens
         if msg.from_me:
-            logger.debug(
-                "[Evolution] Mensagem própria ignorada: id=%s", msg.external_message_id
-            )
             return {"status": "skipped", "reason": "fromMe=true", "message_id": msg.external_message_id}
 
-        # 4. Idempotência
         event = self._create_event_record(msg)
         if event is None:
             return {"status": "skipped", "reason": "duplicate", "message_id": msg.external_message_id}
 
         try:
-            # 5. Upsert Contact
             contact_id = self._upsert_contact(msg)
             event.contact_id = contact_id
 
-            # 6. ConversationService — persiste mensagem e retorna a Conversation
             conversation = self._conversation_svc.handle_inbound_message(
                 db=self._db,
                 message=self._to_internal_message(msg),
@@ -289,54 +156,29 @@ class EvolutionWebhookService:
             event.processed_at = datetime.now(tz=timezone.utc)
             self._db.commit()
 
-            logger.info(
-                "[Evolution] Processado: id=%s phone=%s contact_id=%s",
-                msg.external_message_id,
-                msg.sender_phone,
-                contact_id,
-            )
-
-            # 7. AIEngine — chamado APÓS commit (mensagem já durável no banco)
-            # Falhas aqui NÃO revertem o registro da mensagem inbound.
             if self._ai_engine is not None and msg.raw_text:
                 try:
                     contact = self._db.get(Contact, contact_id)
-                    # --- CONSENT GATE (LGPD) ---
                     if not self._handle_consent_logic(contact, msg.raw_text, conversation.id):
-                        from app.services.evolution_outbound import EvolutionOutboundService
-                        outbound = EvolutionOutboundService(self._evolution_api_key)
-                        consent_msg = "Olá! Antes de continuarmos, você autoriza o processamento dos seus dados para este atendimento? (Responda Sim ou Não)"
-                        outbound.send_text(contact.phone, consent_msg)
                         return {"status": "awaiting_consent", "message_id": msg.external_message_id}
-                    # ---------------------------
-                    self._ai_engine.process_inbound(
+
+                    await self._ai_engine.process_inbound(
+                        db=self._db,
                         conversation=conversation,
-                        contact_phone=msg.sender_phone,
-                        inbound_text=msg.raw_text,
-                        account_id=contact.account_id,
+                        message_text=msg.raw_text,
+                        script={},
                     )
-                except Exception as ai_exc:  # noqa: BLE001
-                    logger.exception(
-                        "[Evolution] AIEngine falhou para id=%s: %s",
-                        msg.external_message_id,
-                        ai_exc,
-                    )
-                    # Intencional: não propaga — evita reentregas desnecessárias
+                except Exception as ai_exc:
+                    logger.exception("[Evolution] AIEngine falhou: %s", ai_exc)
 
             return {"status": "processed", "message_id": msg.external_message_id}
 
-        except Exception as exc:  # noqa: BLE001
-            logger.exception(
-                "[Evolution] Falha ao processar id=%s: %s", msg.external_message_id, exc
-            )
+        except Exception as exc:
+            logger.exception("[Evolution] Falha: %s", exc)
             event.status = EventStatus.FAILED
             event.error_message = str(exc)
             self._db.commit()
             return {"status": "failed", "message_id": msg.external_message_id, "error": str(exc)}
-
-    # ----
-    # Idempotência
-    # ----
 
     def _create_event_record(self, msg: NormalizedMessage) -> WebhookEvent | None:
         event = WebhookEvent(
@@ -344,7 +186,6 @@ class EvolutionWebhookService:
             event_type="messages.upsert",
             status=EventStatus.RECEIVED,
             sender_phone=msg.sender_phone,
-            payload_raw=None,
             received_at=datetime.now(tz=timezone.utc),
         )
         try:
@@ -353,20 +194,10 @@ class EvolutionWebhookService:
             return event
         except IntegrityError:
             self._db.rollback()
-            logger.info(
-                "[Evolution] Duplicata ignorada: external_event_id=%s",
-                msg.external_message_id,
-            )
             return None
 
-    # ----
-    # Upsert Contact
-    # ----
-
     def _upsert_contact(self, msg: NormalizedMessage) -> uuid.UUID:
-        contact = self._contact_repo.get_by_external_user_id(
-            msg.sender_phone, self._account_id
-        )
+        contact = self._contact_repo.get_by_external_user_id(msg.sender_phone, self._account_id)
         if contact is None:
             contact = self._contact_repo.create(
                 account_id=self._account_id,
@@ -374,23 +205,12 @@ class EvolutionWebhookService:
                 full_name=msg.push_name,
                 consent_status="pending",
             )
-            logger.info(
-                "[Evolution] Novo contact: id=%s phone=%s", contact.id, msg.sender_phone
-            )
         elif msg.push_name and contact.full_name != msg.push_name:
             self._contact_repo.update(contact.id, {"full_name": msg.push_name})
         return contact.id
 
-    # ----
-    # Converter NormalizedMessage → dict interno (ConversationService)
-    # ----
-
     @staticmethod
     def _to_internal_message(msg: NormalizedMessage) -> dict[str, Any]:
-        """
-        Adapta NormalizedMessage para o formato dict esperado pelo
-        ConversationService.handle_inbound_message.
-        """
         return {
             "id": msg.external_message_id,
             "from": msg.sender_phone,
@@ -398,35 +218,29 @@ class EvolutionWebhookService:
             "text": {"body": msg.raw_text or ""},
         }
 
-    def _handle_consent_logic(self, contact, text_content: str, conversation_id) -> bool:
-        """
-        Retorna True se a conversa pode prosseguir para a IA.
-        Retorna False se o fluxo de consentimento interceptou a mensagem.
-        """
-        # 1. Verifica se já tem consentimento 'granted'
-        if self.consent_repo.has_granted(contact_id=contact.id, type="lgpd"):
+    def _handle_consent_logic(self, contact, text_content: str, conversation_id: uuid.UUID) -> bool:
+        if self._consent_repo.has_granted(contact_id=contact.id, type="lgpd"):
             return True
 
-        # 2. Se não tem consentimento, verifica se a mensagem atual é uma resposta ao pedido
         clean_text = text_content.strip().lower()
-        
+
         if clean_text in ["sim", "aceito", "concordo"]:
-            self.consent_repo.create(
+            self._consent_repo.create(
                 contact_id=contact.id,
                 conversation_id=conversation_id,
                 type="lgpd",
                 status="granted",
-                purpose="atendimento_geral"
+                purpose="atendimento_geral",
             )
             return True
-            
+
         if clean_text in ["não", "nao", "recuso"]:
-            self.consent_repo.create(
+            self._consent_repo.create(
                 contact_id=contact.id,
                 conversation_id=conversation_id,
                 type="lgpd",
-                status="denied"
+                status="denied",
             )
-            return False 
+            return False
 
         return False
