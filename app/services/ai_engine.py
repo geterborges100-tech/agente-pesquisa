@@ -1,12 +1,9 @@
-﻿import logging
+﻿import asyncio, logging
 from typing import Optional, Dict, Any
-from sqlalchemy.orm import Session
 from app.models.models_v1 import Conversation, Node, NodeType, ConversationStatus
 from app.services.prompt_builder import PromptBuilder
 from app.services.llm_client import LLMClient
 from app.services.state_machine import StateMachine
-from app.repositories.conversations import update_conversation
-from app.repositories.messages import create_message
 
 logger = logging.getLogger(__name__)
 
@@ -15,33 +12,19 @@ class AIEngine:
         self.llm_client = llm_client
         self.prompt_builder = prompt_builder
 
-    async def process_inbound(
-        self,
-        db: Session,
-        conversation: Conversation,
-        message_text: str,
-        script: Dict[str, Any],
-    ) -> Dict[str, Any]:
+    async def process_inbound(self, db, conversation: Conversation, message_text: str, script: Dict[str, Any]) -> Dict[str, Any]:
         logger.info(f"[AIEngine] Iniciando pipeline conversation_id={conversation.id}")
         try:
-            await self._commit_inbound(db, conversation, message_text)
-
             nodes = script.get("nodes", {})
             current_node_key = conversation.current_node_key or script.get("start_node")
 
             if not current_node_key or not nodes.get(current_node_key):
-                logger.warning("[AIEngine] Script vazio ou no nao encontrado - usando fallback.")
-                return {"status": "ok", "outbound_text": "Ola! Como posso ajudar voce hoje?"}
+                return await self._free_chat(message_text)
 
             current_node_data = nodes[current_node_key]
             current_node = Node(key=current_node_key, **current_node_data)
-
             next_status, next_node_key = self._advance(conversation, current_node)
-
             outbound_text = current_node.text or "Entendido! Vamos continuar."
-
-            await update_conversation(db, conversation.id, next_node_key or "")
-
             logger.info(f"[AIEngine] Estado: node={next_node_key or 'none'} status={next_status.value}")
             return {
                 "status": "ok",
@@ -50,9 +33,23 @@ class AIEngine:
                 "conv_status": next_status.value,
                 "outbound_text": outbound_text,
             }
-
         except Exception as e:
             logger.exception(f"[AIEngine] Erro: {str(e)}")
+            return {"status": "error", "reason": str(e)}
+
+    async def _free_chat(self, message_text: str) -> Dict[str, Any]:
+        try:
+            prompt_payload = self.prompt_builder.build(inbound_text=message_text)
+            loop = asyncio.get_running_loop()
+            reply = await loop.run_in_executor(None, self.llm_client.complete, prompt_payload)
+            logger.info(f"Resposta do LLM: {reply}")
+            return {
+                "status": "ok",
+                "outbound_text": reply,
+                "conv_status": "active",
+            }
+        except Exception as e:
+            logger.exception(f"LLM falhou ao gerar resposta")
             return {"status": "error", "reason": str(e)}
 
     def _advance(self, conversation: Conversation, current_node: Node) -> tuple[ConversationStatus, Optional[str]]:
@@ -72,7 +69,3 @@ class AIEngine:
             new_status = StateMachine.transition(current_status, ConversationStatus.CLOSED)
             conversation.status = new_status
             return new_status, None
-
-    async def _commit_inbound(self, db: Session, conversation: Conversation, message_text: str):
-        create_message(db=db, conversation_id=conversation.id, role="user", content=message_text)
-        logger.debug("[AIEngine] Mensagem inbound salva no historico.")

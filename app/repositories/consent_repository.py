@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 import uuid
 from typing import Optional
 from sqlalchemy import select
@@ -13,6 +13,12 @@ class ConsentRepository:
         consent = Consent(contact_id=contact_id, conversation_id=conversation_id, type=type, status=status, purpose=purpose, legal_basis=legal_basis, channel_message_id=channel_message_id)
         self._db.add(consent)
         self._db.flush()
+        return consent
+
+    def create_and_commit(self, *, contact_id: uuid.UUID, conversation_id: uuid.UUID | None, type: str, status: str, purpose: str | None = None, legal_basis: str = "consent", channel_message_id: str | None = None) -> Consent:
+        consent = Consent(contact_id=contact_id, conversation_id=conversation_id, type=type, status=status, purpose=purpose, legal_basis=legal_basis, channel_message_id=channel_message_id)
+        self._db.add(consent)
+        self._db.commit()
         return consent
 
     def get_latest(self, *, contact_id: uuid.UUID, type: str) -> Optional[Consent]:
