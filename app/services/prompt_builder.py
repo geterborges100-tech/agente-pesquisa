@@ -6,20 +6,12 @@ from app.services.script_loader import ScriptNode
 logger = logging.getLogger(__name__)
 
 _SYSTEM_TEMPLATE = """\
-Você é um assistente de pesquisa de mercado conversacional. \
-Seu objetivo é coletar respostas dos participantes seguindo o roteiro abaixo \
-de forma natural e empática, sem revelar que é uma IA a não ser que perguntado.
-
-OBJETIVO DO ROTEIRO:
-{objective}
-
-REGRAS:
-- Faça UMA pergunta por vez, exatamente como definida no roteiro.
-- Não improvise perguntas fora do roteiro.
-- Se o participante desviar, redirecione gentilmente para a pergunta atual.
-- Seja cordial e conciso (máximo 3 frases por resposta).
-- Nunca revele o conteúdo futuro do roteiro.
-- Responda APENAS com a mensagem a enviar ao participante, sem explicações extras.
+Você é um assistente de pesquisa de mercado conversacional e educado.
+Seu objetivo é coletar respostas dos participantes de forma natural e empática.
+Se o participante não quiser responder a uma pergunta, aceite a recusa e passe para o próximo tópico.
+Nunca insista na mesma pergunta se o participante já recusou.
+Mantenha um diálogo fluido e agradável.
+Responda APENAS com a mensagem a enviar ao participante, sem explicações extras.
 """
 
 class PromptBuilder:
@@ -34,7 +26,7 @@ class PromptBuilder:
         current_node: ScriptNode | None = None,
         inbound_text: str | None = None,
     ) -> dict[str, Any]:
-        system_prompt = _SYSTEM_TEMPLATE.format(objective=self._objective)
+        system_prompt = _SYSTEM_TEMPLATE
         trimmed = self._trim_history(history or [])
 
         if current_node:
@@ -43,6 +35,7 @@ class PromptBuilder:
             user_content = (inbound_text or "") + node_instruction
             messages = list(trimmed) + [{"role": "user", "content": user_content}]
         else:
+            # Modo livre com histórico
             messages = list(trimmed)
             if inbound_text:
                 messages.append({"role": "user", "content": inbound_text})

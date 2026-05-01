@@ -1,6 +1,8 @@
 ﻿import asyncio, logging
 from typing import Optional, Dict, Any
+from sqlalchemy.orm import Session
 from app.models.models_v1 import Conversation, Node, NodeType, ConversationStatus
+from app.models.extended_models import Message
 from app.services.prompt_builder import PromptBuilder
 from app.services.llm_client import LLMClient
 from app.services.state_machine import StateMachine
@@ -12,14 +14,14 @@ class AIEngine:
         self.llm_client = llm_client
         self.prompt_builder = prompt_builder
 
-    async def process_inbound(self, db, conversation: Conversation, message_text: str, script: Dict[str, Any]) -> Dict[str, Any]:
+    async def process_inbound(self, db: Session, conversation: Conversation, message_text: str, script: Dict[str, Any]) -> Dict[str, Any]:
         logger.info(f"[AIEngine] Iniciando pipeline conversation_id={conversation.id}")
         try:
             nodes = script.get("nodes", {})
             current_node_key = conversation.current_node_key or script.get("start_node")
 
             if not current_node_key or not nodes.get(current_node_key):
-                return await self._free_chat(message_text)
+                return await self._free_chat(db, conversation, message_text)
 
             current_node_data = nodes[current_node_key]
             current_node = Node(key=current_node_key, **current_node_data)
@@ -37,19 +39,33 @@ class AIEngine:
             logger.exception(f"[AIEngine] Erro: {str(e)}")
             return {"status": "error", "reason": str(e)}
 
-    async def _free_chat(self, message_text: str) -> Dict[str, Any]:
+    async def _free_chat(self, db: Session, conversation: Conversation, message_text: str) -> Dict[str, Any]:
         try:
-            prompt_payload = self.prompt_builder.build(inbound_text=message_text)
+            # Carrega as últimas 10 mensagens da conversa
+            messages = (
+                db.query(Message)
+                .filter(Message.conversation_id == conversation.id)
+                .order_by(Message.sent_at.asc())
+                .limit(10)
+                .all()
+            )
+            history = PromptBuilder.history_from_messages(messages)
+
+            prompt_payload = self.prompt_builder.build(
+                history=history,
+                current_node=None,
+                inbound_text=message_text,
+            )
             loop = asyncio.get_running_loop()
             reply = await loop.run_in_executor(None, self.llm_client.complete, prompt_payload)
-            logger.info(f"Resposta do LLM: {reply}")
+            logger.info(f"[AIEngine] Resposta do LLM: {reply[:80]}")
             return {
                 "status": "ok",
                 "outbound_text": reply,
                 "conv_status": "active",
             }
         except Exception as e:
-            logger.exception(f"LLM falhou ao gerar resposta")
+            logger.exception("LLM falhou ao gerar resposta")
             return {"status": "error", "reason": str(e)}
 
     def _advance(self, conversation: Conversation, current_node: Node) -> tuple[ConversationStatus, Optional[str]]:
