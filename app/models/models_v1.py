@@ -113,8 +113,3 @@ class ConversationStatus(str, Enum):
     CLOSED = "closed"
     WAITING_CONSENT = "waiting_consent"
     ARCHIVED = "archived"
-
-    OPEN = "open"
-    CLOSED = "closed"
-    WAITING_CONSENT = "waiting_consent"
-    ARCHIVED = "archived"
