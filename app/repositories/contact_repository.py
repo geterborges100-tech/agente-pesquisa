@@ -35,12 +35,9 @@ class ContactRepository:
         Busca por external_user_id AND account_id — nunca só um dos dois.
         Evita colisão entre contas distintas que recebam o mesmo wa_id.
         """
-        stmt = (
-            select(Contact)
-            .where(
-                Contact.external_user_id == wa_id,
-                Contact.account_id == account_id,
-            )
+        stmt = select(Contact).where(
+            Contact.external_user_id == wa_id,
+            Contact.account_id == account_id,
         )
         return self._db.scalars(stmt).first()
 
@@ -76,8 +73,11 @@ class ContactRepository:
             raise ValueError(f"Contact não encontrado: {contact_id}")
 
         allowed = {
-            "full_name", "username", "consent_status",
-            "segment", "lead_score",
+            "full_name",
+            "username",
+            "consent_status",
+            "segment",
+            "lead_score",
         }
         for key, value in data.items():
             if key not in allowed:

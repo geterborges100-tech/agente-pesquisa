@@ -1,20 +1,26 @@
-﻿import asyncio, logging
-from typing import Optional, Dict, Any
+import asyncio
+import logging
+from typing import Any
+
 from sqlalchemy.orm import Session
-from app.models.models_v1 import Conversation, Node, NodeType, ConversationStatus
+
 from app.models.extended_models import Message
-from app.services.prompt_builder import PromptBuilder
+from app.models.models_v1 import Conversation, ConversationStatus, Node, NodeType
 from app.services.llm_client import LLMClient
+from app.services.prompt_builder import PromptBuilder
 from app.services.state_machine import StateMachine
 
 logger = logging.getLogger(__name__)
+
 
 class AIEngine:
     def __init__(self, llm_client: LLMClient, prompt_builder: PromptBuilder):
         self.llm_client = llm_client
         self.prompt_builder = prompt_builder
 
-    async def process_inbound(self, db: Session, conversation: Conversation, message_text: str, script: Dict[str, Any]) -> Dict[str, Any]:
+    async def process_inbound(
+        self, db: Session, conversation: Conversation, message_text: str, script: dict[str, Any]
+    ) -> dict[str, Any]:
         logger.info(f"[AIEngine] Iniciando pipeline conversation_id={conversation.id}")
         try:
             nodes = script.get("nodes", {})
@@ -39,7 +45,7 @@ class AIEngine:
             logger.exception(f"[AIEngine] Erro: {str(e)}")
             return {"status": "error", "reason": str(e)}
 
-    async def _free_chat(self, db: Session, conversation: Conversation, message_text: str) -> Dict[str, Any]:
+    async def _free_chat(self, db: Session, conversation: Conversation, message_text: str) -> dict[str, Any]:
         try:
             # Carrega as últimas 10 mensagens da conversa
             messages = (
@@ -68,7 +74,7 @@ class AIEngine:
             logger.exception("LLM falhou ao gerar resposta")
             return {"status": "error", "reason": str(e)}
 
-    def _advance(self, conversation: Conversation, current_node: Node) -> tuple[ConversationStatus, Optional[str]]:
+    def _advance(self, conversation: Conversation, current_node: Node) -> tuple[ConversationStatus, str | None]:
         current_status = ConversationStatus(conversation.status)
         if current_node.node_type == NodeType.QUESTION:
             conversation.current_node_key = current_node.key

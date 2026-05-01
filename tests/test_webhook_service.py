@@ -20,7 +20,7 @@ from app.services.webhook_service import (
     validate_signature,
 )
 
-SECRET     = "test_secret"
+SECRET = "test_secret"
 ACCOUNT_ID = uuid.uuid4()
 
 
@@ -80,9 +80,7 @@ class TestValidateSignature:
 
     def test_bad_prefix(self):
         with pytest.raises(WebhookSignatureError, match="Formato"):
-            validate_signature(
-                raw_body=b"x", signature_header="md5=abc", app_secret=SECRET
-            )
+            validate_signature(raw_body=b"x", signature_header="md5=abc", app_secret=SECRET)
 
     def test_wrong_digest(self):
         with pytest.raises(WebhookSignatureError, match="inválida"):
@@ -104,7 +102,7 @@ class TestWebhookService:
         svc = WebhookService(
             db=db,
             app_secret=SECRET,
-            account_id=ACCOUNT_ID,   # ← obrigatório (Contact.account_id)
+            account_id=ACCOUNT_ID,  # ← obrigatório (Contact.account_id)
         )
         return svc, db
 
@@ -124,11 +122,11 @@ class TestWebhookService:
         db.flush = MagicMock()  # não lança IntegrityError → evento novo
         svc, _ = self._make_service(db)
 
-        body   = _make_payload()
+        body = _make_payload()
         result = svc.process_webhook(raw_body=body, signature_header=_sign(body))
 
         assert result["processed"] == 1
-        assert result["skipped"]   == 0
+        assert result["skipped"] == 0
 
     def test_skips_duplicate_message(self):
         from sqlalchemy.exc import IntegrityError
@@ -137,22 +135,22 @@ class TestWebhookService:
         db.flush.side_effect = IntegrityError("dup", {}, None)
         svc, _ = self._make_service(db)
 
-        body   = _make_payload()
+        body = _make_payload()
         result = svc.process_webhook(raw_body=body, signature_header=_sign(body))
 
-        assert result["skipped"]   == 1
+        assert result["skipped"] == 1
         assert result["processed"] == 0
 
     def test_message_without_id_is_ignored(self):
         """Mensagem sem campo 'id' não deve gerar evento nem contar como falha."""
-        db  = MagicMock()
+        db = MagicMock()
         svc, _ = self._make_service(db)
 
         payload = {
             "object": "whatsapp_business_account",
             "entry": [{"changes": [{"value": {"messages": [{"from": "5511999990000", "type": "text"}]}}]}],
         }
-        body   = json.dumps(payload).encode()
+        body = json.dumps(payload).encode()
         result = svc.process_webhook(raw_body=body, signature_header=_sign(body))
 
         assert result == {"processed": 0, "skipped": 0, "failed": 0}
@@ -166,7 +164,7 @@ class TestWebhookService:
             "object": "whatsapp_business_account",
             "entry": [{"changes": [{"value": {"messages": [{"id": "wamid.xyz", "type": "text"}]}}]}],
         }
-        body   = json.dumps(payload).encode()
+        body = json.dumps(payload).encode()
         result = svc.process_webhook(raw_body=body, signature_header=_sign(body))
 
         assert result["failed"] == 1

@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from openai import OpenAI, APIConnectionError, RateLimitError, APIStatusError
+from openai import APIConnectionError, APIStatusError, OpenAI, RateLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -90,9 +90,7 @@ class LLMClient:
         except RateLimitError as exc:
             raise LLMError(f"Rate limit atingido: {exc}") from exc
         except APIStatusError as exc:
-            raise LLMError(
-                f"API retornou status {exc.status_code}: {exc.message}"
-            ) from exc
+            raise LLMError(f"API retornou status {exc.status_code}: {exc.message}") from exc
 
         content = response.choices[0].message.content if response.choices else None
         if not content:

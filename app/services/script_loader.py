@@ -53,15 +53,17 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class ScriptNode:
     """Representação de um nó do roteiro."""
+
     key: str
-    node_type: str          # question | statement | branch | end
-    text: str               # texto a exibir / enviar
-    next_key: str | None    # None se tipo "end" ou sem próximo
+    node_type: str  # question | statement | branch | end
+    text: str  # texto a exibir / enviar
+    next_key: str | None  # None se tipo "end" ou sem próximo
 
 
 @dataclass(frozen=True)
 class LoadedScript:
     """Resultado do carregamento — script + versão resolvidos."""
+
     script_id: str
     version_number: int
     start_node_key: str
@@ -129,9 +131,7 @@ class ScriptLoader:
         )
         script: ResearchScript | None = self._db.scalars(script_stmt).first()
         if script is None:
-            raise NoActiveScriptError(
-                f"Nenhum ResearchScript ativo para account_id={account_id}."
-            )
+            raise NoActiveScriptError(f"Nenhum ResearchScript ativo para account_id={account_id}.")
 
         # 2. Versão mais recente
         version_stmt = (
@@ -142,9 +142,7 @@ class ScriptLoader:
         )
         version: ResearchScriptVersion | None = self._db.scalars(version_stmt).first()
         if version is None:
-            raise NoActiveScriptError(
-                f"ResearchScript id={script.id} não possui versões."
-            )
+            raise NoActiveScriptError(f"ResearchScript id={script.id} não possui versões.")
 
         logger.info(
             "[ScriptLoader] Script carregado: id=%s version=%d",
@@ -172,13 +170,9 @@ class ScriptLoader:
         start_node_key: str | None = definition.get("start_node")
 
         if not raw_nodes:
-            raise InvalidScriptDefinitionError(
-                "definition_json deve conter 'nodes' não vazio."
-            )
+            raise InvalidScriptDefinitionError("definition_json deve conter 'nodes' não vazio.")
         if not start_node_key:
-            raise InvalidScriptDefinitionError(
-                "definition_json deve conter 'start_node'."
-            )
+            raise InvalidScriptDefinitionError("definition_json deve conter 'start_node'.")
 
         nodes: dict[str, ScriptNode] = {}
         for key, raw in raw_nodes.items():
@@ -193,9 +187,7 @@ class ScriptLoader:
             )
 
         if start_node_key not in nodes:
-            raise InvalidScriptDefinitionError(
-                f"'start_node' ({start_node_key!r}) não encontrado em 'nodes'."
-            )
+            raise InvalidScriptDefinitionError(f"'start_node' ({start_node_key!r}) não encontrado em 'nodes'.")
 
         return LoadedScript(
             script_id=script_id,

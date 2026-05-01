@@ -6,7 +6,6 @@ Processa eventos recebidos da Evolution API v2.3.7.
 from __future__ import annotations
 
 import logging
-import os
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -21,7 +20,7 @@ from app.repositories.consent_repository import ConsentRepository
 from app.repositories.contact_repository import ContactRepository
 from app.services.conversation_service import ConversationService
 from app.services.evolution_outbound import EvolutionOutboundClient
-from app.services.guardrail_validator import GuardrailValidator, GuardrailViolationError
+from app.services.guardrail_validator import GuardrailValidator
 
 if TYPE_CHECKING:
     from app.services.ai_engine import AIEngine
@@ -128,7 +127,7 @@ class EvolutionWebhookService:
         evolution_api_key: str,
         account_id: uuid.UUID,
         conversation_service: ConversationService | None = None,
-        ai_engine: "AIEngine | None" = None,
+        ai_engine: AIEngine | None = None,
     ) -> None:
         self._db = db
         self._evolution_api_key = evolution_api_key

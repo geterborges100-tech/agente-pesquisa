@@ -6,7 +6,6 @@ Endpoints de Contacts — alinhado com openapi_v1.yaml.
 from __future__ import annotations
 
 import uuid
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -22,8 +21,8 @@ router = APIRouter(prefix="/contacts", tags=["Contacts"])
 
 @router.get("", response_model=PaginatedContacts)
 def list_contacts(
-    segment: Optional[str] = Query(None),
-    consent_status: Optional[str] = Query(None),
+    segment: str | None = Query(None),
+    consent_status: str | None = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),

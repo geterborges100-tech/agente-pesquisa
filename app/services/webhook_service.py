@@ -83,11 +83,9 @@ def validate_signature(
 
     prefix = "sha256="
     if not signature_header.startswith(prefix):
-        raise WebhookSignatureError(
-            f"Formato de assinatura inesperado: {signature_header!r}"
-        )
+        raise WebhookSignatureError(f"Formato de assinatura inesperado: {signature_header!r}")
 
-    received_digest = signature_header[len(prefix):]
+    received_digest = signature_header[len(prefix) :]
     expected_digest = _compute_hmac(app_secret, raw_body)
 
     if not hmac.compare_digest(received_digest, expected_digest):
@@ -208,7 +206,7 @@ class WebhookService:
         except json.JSONDecodeError as exc:
             raise WebhookPayloadError(f"Payload JSON inválido: {exc}") from exc
 
-        messages    = _extract_messages(payload)
+        messages = _extract_messages(payload)
         contact_map = _extract_contacts(payload)
         payload_str = raw_body.decode(errors="replace")
 
@@ -274,16 +272,14 @@ class WebhookService:
             )
 
             # 6. Marcar como processado
-            event.status       = EventStatus.PROCESSED
+            event.status = EventStatus.PROCESSED
             event.processed_at = datetime.now(tz=timezone.utc)
             self._db.commit()
             return "processed"
 
         except Exception as exc:  # noqa: BLE001
-            logger.exception(
-                "Falha ao processar evento external_id=%s: %s", external_id, exc
-            )
-            event.status        = EventStatus.FAILED
+            logger.exception("Falha ao processar evento external_id=%s: %s", external_id, exc)
+            event.status = EventStatus.FAILED
             event.error_message = str(exc)
             self._db.commit()
             return "failed"
@@ -349,12 +345,10 @@ class WebhookService:
         if not wa_id:
             raise WebhookPayloadError("Mensagem sem campo 'from' (wa_id).")
 
-        profile   = contact_info.get("profile", {})
+        profile = contact_info.get("profile", {})
         full_name = profile.get("name")
 
-        contact = self._contact_repo.get_by_external_user_id(
-            wa_id, self._account_id
-        )
+        contact = self._contact_repo.get_by_external_user_id(wa_id, self._account_id)
 
         if contact is None:
             contact = self._contact_repo.create(

@@ -26,18 +26,18 @@ logger = logging.getLogger(__name__)
 
 
 class ConversationStatus(str, Enum):
-    OPEN    = "open"
-    ACTIVE  = "active"
+    OPEN = "open"
+    ACTIVE = "active"
     WAITING = "waiting"
-    CLOSED  = "closed"
+    CLOSED = "closed"
 
 
 # Transições válidas: {from_state} → {allowed_to_states}
 _ALLOWED_TRANSITIONS: dict[ConversationStatus, set[ConversationStatus]] = {
-    ConversationStatus.OPEN:    {ConversationStatus.ACTIVE, ConversationStatus.CLOSED},
-    ConversationStatus.ACTIVE:  {ConversationStatus.WAITING, ConversationStatus.CLOSED},
+    ConversationStatus.OPEN: {ConversationStatus.ACTIVE, ConversationStatus.CLOSED},
+    ConversationStatus.ACTIVE: {ConversationStatus.WAITING, ConversationStatus.CLOSED},
     ConversationStatus.WAITING: {ConversationStatus.ACTIVE, ConversationStatus.CLOSED},
-    ConversationStatus.CLOSED:  set(),  # estado terminal
+    ConversationStatus.CLOSED: set(),  # estado terminal
 }
 
 
@@ -78,7 +78,7 @@ class StateMachine:
         """
         try:
             from_state = ConversationStatus(current_status)
-            to_state   = ConversationStatus(new_status)
+            to_state = ConversationStatus(new_status)
         except ValueError as exc:
             raise ValueError(f"Status inválido: {exc}") from exc
 
@@ -97,7 +97,7 @@ class StateMachine:
         """Retorna True se a transição for permitida, sem lançar exceção."""
         try:
             from_state = ConversationStatus(current_status)
-            to_state   = ConversationStatus(new_status)
+            to_state = ConversationStatus(new_status)
         except ValueError:
             return False
         return to_state in _ALLOWED_TRANSITIONS[from_state]

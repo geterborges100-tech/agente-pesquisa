@@ -51,19 +51,18 @@ class EvolutionOutboundClient:
     def __init__(
         self,
         base_url: str | None = None,
-        api_key:  str | None = None,
+        api_key: str | None = None,
         instance: str | None = None,
-        timeout:  float = _DEFAULT_TIMEOUT,
+        timeout: float = _DEFAULT_TIMEOUT,
     ) -> None:
         self._base_url = (base_url or os.environ.get("EVOLUTION_BASE_URL", "http://localhost:8080")).rstrip("/")
-        self._api_key  = api_key  or os.environ.get("EVOLUTION_API_KEY", "")
+        self._api_key = api_key or os.environ.get("EVOLUTION_API_KEY", "")
         self._instance = instance or os.environ.get("EVOLUTION_INSTANCE", "Provedor_CRM")
-        self._timeout  = timeout
+        self._timeout = timeout
 
         if not self._api_key:
             raise OutboundError(
-                "EVOLUTION_API_KEY não definida. "
-                "Defina a variável de ambiente ou passe api_key ao construtor."
+                "EVOLUTION_API_KEY não definida. Defina a variável de ambiente ou passe api_key ao construtor."
             )
 
     def send_text(self, *, number: str, text: str) -> dict[str, Any]:
@@ -103,18 +102,12 @@ class EvolutionOutboundClient:
             with httpx.Client(timeout=self._timeout) as client:
                 response = client.post(url, headers=headers, json=body)
         except httpx.TimeoutException as exc:
-            raise OutboundError(
-                f"Timeout ao enviar mensagem para Evolution API: {exc}"
-            ) from exc
+            raise OutboundError(f"Timeout ao enviar mensagem para Evolution API: {exc}") from exc
         except httpx.RequestError as exc:
-            raise OutboundError(
-                f"Erro de conexão com Evolution API: {exc}"
-            ) from exc
+            raise OutboundError(f"Erro de conexão com Evolution API: {exc}") from exc
 
         if response.status_code not in (200, 201):
-            raise OutboundError(
-                f"Evolution API retornou status {response.status_code}: {response.text[:200]}"
-            )
+            raise OutboundError(f"Evolution API retornou status {response.status_code}: {response.text[:200]}")
 
         logger.info(
             "[Outbound] Mensagem enviada com sucesso → status=%d number=%s",

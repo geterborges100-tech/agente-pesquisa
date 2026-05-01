@@ -1,19 +1,24 @@
-﻿from __future__ import annotations
+from __future__ import annotations
+
 import enum
 import uuid
 from datetime import datetime
+
 from sqlalchemy import DateTime, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+
 class Base(DeclarativeBase):
     pass
 
+
 class EventStatus(str, enum.Enum):
-    RECEIVED  = "received"
+    RECEIVED = "received"
     PROCESSED = "processed"
     DUPLICATE = "duplicate"
-    FAILED    = "failed"
+    FAILED = "failed"
+
 
 class WebhookEvent(Base):
     __tablename__ = "webhook_events"
@@ -29,9 +34,7 @@ class WebhookEvent(Base):
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    __table_args__ = (
-        Index("ix_webhook_events_status_received", "status", "received_at"),
-    )
+    __table_args__ = (Index("ix_webhook_events_status_received", "status", "received_at"),)
 
     def __repr__(self) -> str:
         return f"<WebhookEvent id={self.id} external={self.external_event_id!r} status={self.status}>"

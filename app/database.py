@@ -49,11 +49,8 @@ def get_db() -> Generator[Session, None, None]:
 
 def create_all_tables() -> None:
     """Cria tabelas declaradas nos models. Use Alembic em produção."""
-    from app.models.models_v1 import Base as AppBase
     from app.models.event import Base as EventBase
-    from app.models.extended_models import (
-        Handoff, ResearchScript, ResearchScriptVersion, LLMConfig
-    )
+    from app.models.models_v1 import Base as AppBase
 
     AppBase.metadata.create_all(bind=engine)
     EventBase.metadata.create_all(bind=engine)

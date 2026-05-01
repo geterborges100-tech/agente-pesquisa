@@ -7,8 +7,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models.models_v1 import Contact, Conversation
 from app.models.extended_models import Message
+from app.models.models_v1 import Contact, Conversation
 
 logger = logging.getLogger(__name__)
 

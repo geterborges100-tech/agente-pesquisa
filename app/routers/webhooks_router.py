@@ -4,6 +4,7 @@ def _build_ai_engine(db: Session) -> AIEngine | None:
     Retorna None se não houver config ativa (webhook continua funcionando sem IA).
     """
     from sqlalchemy import select
+
     from app.models.extended_models import LLMConfig
 
     evolution_base = os.environ.get("EVOLUTION_BASE_URL", "")
@@ -14,11 +15,7 @@ def _build_ai_engine(db: Session) -> AIEngine | None:
         return None
 
     # Busca config LLM ativa no banco
-    stmt = (
-        select(LLMConfig)
-        .where(LLMConfig.account_id == ACCOUNT_ID, LLMConfig.is_active == True)
-        .limit(1)
-    )
+    stmt = select(LLMConfig).where(LLMConfig.account_id == ACCOUNT_ID, LLMConfig.is_active == True).limit(1)
     config: LLMConfig | None = db.scalars(stmt).first()
 
     if config is None:

@@ -1,6 +1,8 @@
-﻿from __future__ import annotations
+from __future__ import annotations
+
 import logging
 from typing import Any
+
 from app.services.script_loader import ScriptNode
 
 logger = logging.getLogger(__name__)
@@ -13,6 +15,7 @@ Nunca insista na mesma pergunta se o participante já recusou.
 Mantenha um diálogo fluido e agradável.
 Responda APENAS com a mensagem a enviar ao participante, sem explicações extras.
 """
+
 
 class PromptBuilder:
     def __init__(self, objective: str = "Pesquisa de mercado", max_history: int = 10) -> None:
@@ -30,7 +33,11 @@ class PromptBuilder:
         trimmed = self._trim_history(history or [])
 
         if current_node:
-            next_info = f"Próximo nó: {current_node.next_key}" if current_node.next_key else "Último nó — encerre com cordialidade."
+            next_info = (
+                f"Próximo nó: {current_node.next_key}"
+                if current_node.next_key
+                else "Último nó — encerre com cordialidade."
+            )
             node_instruction = f"\n\n---\n[INSTRUÇÃO INTERNA — NÃO EXIBIR AO PARTICIPANTE]\nNó atual: {current_node.key} (tipo: {current_node.node_type})\nTexto do nó: {current_node.text}\n{next_info}\nEnvie exatamente o texto do nó acima ao participante agora."
             user_content = (inbound_text or "") + node_instruction
             messages = list(trimmed) + [{"role": "user", "content": user_content}]

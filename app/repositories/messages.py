@@ -1,5 +1,7 @@
-from sqlalchemy.orm import Session
 import uuid
+
+from sqlalchemy.orm import Session
+
 
 async def create_message(db: Session, conversation_id: uuid.UUID, role: str, content: str):
     # Aqui você pode implementar a lógica de salvar a mensagem no banco se tiver a model de Message

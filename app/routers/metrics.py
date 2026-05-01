@@ -6,8 +6,6 @@ Implementação stub para Sprint 1; lógica real no Sprint 6.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -26,8 +24,8 @@ def metrics_overview(db: Session = Depends(get_db)) -> MetricsOverviewResponse:
 
 @router.get("/conversations")
 def metrics_conversations(
-    from_date: Optional[str] = None,
-    to_date: Optional[str] = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
     db: Session = Depends(get_db),
 ) -> JSONResponse:
     # Stub — Sprint 6
