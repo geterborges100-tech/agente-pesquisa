@@ -1,4 +1,4 @@
-﻿"""
+"""
 app/services/evolution_webhook_service.py
 Processa eventos recebidos da Evolution API v2.3.7.
 """
@@ -15,16 +15,24 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.event import EventStatus, WebhookEvent
-from app.models.models_v1 import Contact
+from app.models.models_v1 import Contact, Conversation
 from app.repositories.consent_repository import ConsentRepository
 from app.repositories.contact_repository import ContactRepository
 from app.services.conversation_service import ConversationService
+from app.services.evolution_outbound import EvolutionOutboundClient
 from app.services.guardrail_validator import GuardrailValidator
 
 if TYPE_CHECKING:
     from app.services.ai_engine import AIEngine
 
 logger = logging.getLogger(__name__)
+
+LGPD_MESSAGE = (
+    "Ola! Antes de continuar, preciso do seu consentimento para processar seus dados "
+    "conforme a LGPD. Voce concorda? Responda *sim* para aceitar ou *nao* para recusar."
+)
+CONSENT_DENIED_MESSAGE = "Entendido. Seus dados nao serao processados. Ate logo!"
+CONSENT_GRANTED_MESSAGE = "Obrigado! Consentimento registrado. Como posso ajudar?"
 
 
 class EvolutionPayloadError(ValueError):
@@ -119,7 +127,7 @@ class EvolutionWebhookService:
         evolution_api_key: str,
         account_id: uuid.UUID,
         conversation_service: ConversationService | None = None,
-        ai_engine: "AIEngine | None" = None,
+        ai_engine: AIEngine | None = None,
     ) -> None:
         self._db = db
         self._evolution_api_key = evolution_api_key
@@ -129,6 +137,13 @@ class EvolutionWebhookService:
         self._consent_repo = ConsentRepository(db)
         self._guardrail = GuardrailValidator()
         self._ai_engine = ai_engine
+        self._outbound = EvolutionOutboundClient()
+
+    def _send(self, number: str, text: str) -> None:
+        try:
+            self._outbound.send_text(number=number, text=text)
+        except Exception as exc:
+            logger.error("[Evolution] Falha ao enviar mensagem outbound: %s", exc)
 
     async def process_event(self, *, payload: dict[str, Any], api_key_header: str | None) -> dict[str, Any]:
         validate_evolution_api_key(received_key=api_key_header, expected_key=self._evolution_api_key)
@@ -156,20 +171,35 @@ class EvolutionWebhookService:
             event.processed_at = datetime.now(tz=timezone.utc)
             self._db.commit()
 
-            if self._ai_engine is not None and msg.raw_text:
-                try:
-                    contact = self._db.get(Contact, contact_id)
-                    if not self._handle_consent_logic(contact, msg.raw_text, conversation.id):
-                        return {"status": "awaiting_consent", "message_id": msg.external_message_id}
+            if msg.raw_text:
+                contact = self._db.get(Contact, contact_id)
+                consent_result = self._handle_consent_logic(contact, msg.raw_text, conversation.id)
 
-                    await self._ai_engine.process_inbound(
-                        db=self._db,
-                        conversation=conversation,
-                        message_text=msg.raw_text,
-                        script={},
-                    )
-                except Exception as ai_exc:
-                    logger.exception("[Evolution] AIEngine falhou: %s", ai_exc)
+                if consent_result is not None:
+                    status = consent_result.get("status")
+                    if status == "awaiting_consent":
+                        self._send(msg.sender_phone, LGPD_MESSAGE)
+                    elif status == "consent_denied":
+                        self._send(msg.sender_phone, CONSENT_DENIED_MESSAGE)
+                    elif status == "consent_granted":
+                        self._send(msg.sender_phone, CONSENT_GRANTED_MESSAGE)
+                    return {**consent_result, "message_id": msg.external_message_id}
+
+                if self._ai_engine is not None:
+                    try:
+                        result = await self._ai_engine.process_inbound(
+                            db=self._db,
+                            conversation=conversation,
+                            message_text=msg.raw_text,
+                            script={},
+                        )
+                        outbound_text = result.get("outbound_text")
+                        if outbound_text:
+                            self._send(msg.sender_phone, outbound_text)
+                    except Exception as ai_exc:
+                        logger.exception("[Evolution] AIEngine falhou: %s", ai_exc)
+                else:
+                    logger.warning("[Evolution] AIEngine nao configurado - OPENROUTER_API_KEY ausente?")
 
             return {"status": "processed", "message_id": msg.external_message_id}
 
@@ -218,29 +248,33 @@ class EvolutionWebhookService:
             "text": {"body": msg.raw_text or ""},
         }
 
-    def _handle_consent_logic(self, contact, text_content: str, conversation_id: uuid.UUID) -> bool:
+    def _handle_consent_logic(self, contact, text_content: str, conversation_id: uuid.UUID) -> dict | None:
         if self._consent_repo.has_granted(contact_id=contact.id, type="lgpd"):
-            return True
+            return None
 
         clean_text = text_content.strip().lower()
 
-        if clean_text in ["sim", "aceito", "concordo"]:
-            self._consent_repo.create(
+        if clean_text in ["sim", "aceito", "concordo", "s"]:
+            self._consent_repo.create_and_commit(
                 contact_id=contact.id,
                 conversation_id=conversation_id,
                 type="lgpd",
                 status="granted",
                 purpose="atendimento_geral",
             )
-            return True
+            return {"status": "consent_granted"}
 
-        if clean_text in ["não", "nao", "recuso"]:
-            self._consent_repo.create(
+        if clean_text in ["nao", "nao", "recuso", "n"]:
+            self._consent_repo.create_and_commit(
                 contact_id=contact.id,
                 conversation_id=conversation_id,
                 type="lgpd",
                 status="denied",
             )
-            return False
+            conv = self._db.get(Conversation, conversation_id)
+            if conv:
+                conv.status = "closed"
+                self._db.flush()
+            return {"status": "consent_denied", "reason": "user_refused"}
 
-        return False
+        return {"status": "awaiting_consent"}

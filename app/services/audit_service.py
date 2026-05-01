@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any
-from zoneinfo import ZoneInfo          # Python 3.9+ — sem dependências externas
 from datetime import datetime
+from typing import Any
+from zoneinfo import ZoneInfo  # Python 3.9+ — sem dependências externas
 
 from sqlalchemy.orm import Session
+
 from app.models.models_v1 import AuditLog
 
 # Fuso horário oficial do projeto
@@ -47,7 +48,7 @@ def log_event(
         criticality=criticality,
         conversation_id=conversation_id,
         context=context,
-        created_at=_now_brasilia(),    # ← Brasília/DF explícito
+        created_at=_now_brasilia(),  # ← Brasília/DF explícito
     )
     db.add(row)
     db.flush()

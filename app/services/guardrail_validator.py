@@ -22,7 +22,6 @@ import logging
 import re
 import uuid
 from dataclasses import dataclass, field
-from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -32,13 +31,13 @@ logger = logging.getLogger(__name__)
 # Padrões de PII (detecção básica)
 # ──────────────────────────────────────────────
 _PII_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    ("CPF",    re.compile(r"\b\d{3}[.\-]?\d{3}[.\-]?\d{3}[.\-]?\d{2}\b")),
-    ("CNPJ",   re.compile(r"\b\d{2}[.\-]?\d{3}[.\-]?\d{3}[/\-]?\d{4}[.\-]?\d{2}\b")),
+    ("CPF", re.compile(r"\b\d{3}[.\-]?\d{3}[.\-]?\d{3}[.\-]?\d{2}\b")),
+    ("CNPJ", re.compile(r"\b\d{2}[.\-]?\d{3}[.\-]?\d{3}[/\-]?\d{4}[.\-]?\d{2}\b")),
     ("Cartão", re.compile(r"\b(?:\d[ \-]?){15,16}\b")),
 ]
 
 _INTERNAL_MARKER = re.compile(r"\[INSTRUÇÃO INTERNA", re.IGNORECASE)
-_CONTROL_CHARS   = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 _MIN_LENGTH = 3
 _MAX_LENGTH = 1_600  # ~2 mensagens WhatsApp
@@ -48,12 +47,12 @@ _MAX_LENGTH = 1_600  # ~2 mensagens WhatsApp
 # Categorias proibidas de coleta sem base legal específica
 # ──────────────────────────────────────────────
 _SENSITIVE_CATEGORIES: list[tuple[str, list[str]]] = [
-    ("health",      ["saúde", "doença", "diagnóstico", "medicamento", "tratamento", "enfermidade", "condição médica"]),
-    ("religion",    ["religião", "crença", "fé", "culto", "igreja", "templo", "deus", "religioso"]),
-    ("ethnicity",   ["etnia", "raça", "cor da pele", "origem racial", "descendência"]),
-    ("sexuality",   ["orientação sexual", "sexualidade", "gay", "lésbica", "bissexual", "trans", "gênero"]),
-    ("politics",    ["partido político", "filiação partidária", "voto", "candidato"]),
-    ("biometrics",  ["biometria", "impressão digital", "reconhecimento facial", "dado genético"]),
+    ("health", ["saúde", "doença", "diagnóstico", "medicamento", "tratamento", "enfermidade", "condição médica"]),
+    ("religion", ["religião", "crença", "fé", "culto", "igreja", "templo", "deus", "religioso"]),
+    ("ethnicity", ["etnia", "raça", "cor da pele", "origem racial", "descendência"]),
+    ("sexuality", ["orientação sexual", "sexualidade", "gay", "lésbica", "bissexual", "trans", "gênero"]),
+    ("politics", ["partido político", "filiação partidária", "voto", "candidato"]),
+    ("biometrics", ["biometria", "impressão digital", "reconhecimento facial", "dado genético"]),
 ]
 
 # Mensagem de fallback quando dado sensível é bloqueado
@@ -63,6 +62,7 @@ _SENSITIVE_FALLBACK = "Prefiro seguir com outra pergunta 🙂"
 # ──────────────────────────────────────────────
 # Resultado estruturado
 # ──────────────────────────────────────────────
+
 
 @dataclass
 class ValidationResult:
@@ -96,6 +96,7 @@ class SensitiveDataBlockedError(GuardrailViolationError):
 # ──────────────────────────────────────────────
 # GuardrailValidator
 # ──────────────────────────────────────────────
+
 
 class GuardrailValidator:
     """
@@ -151,15 +152,11 @@ class GuardrailValidator:
         if result.valid:
             # 2. Comprimento mínimo
             if len(cleaned) < self._min:
-                result.add(
-                    f"Resposta muito curta ({len(cleaned)} chars, mínimo {self._min})."
-                )
+                result.add(f"Resposta muito curta ({len(cleaned)} chars, mínimo {self._min}).")
 
             # 3. Comprimento máximo
             if len(cleaned) > self._max:
-                result.add(
-                    f"Resposta muito longa ({len(cleaned)} chars, máximo {self._max})."
-                )
+                result.add(f"Resposta muito longa ({len(cleaned)} chars, máximo {self._max}).")
 
             # 4. Marcadores internos vazados
             if _INTERNAL_MARKER.search(cleaned):
@@ -232,6 +229,7 @@ class GuardrailValidator:
 
         try:
             from app.services.audit_service import log_event
+
             log_event(
                 db,
                 event="guardrail.sensitive_data_blocked",

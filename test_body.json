@@ -1,0 +1,1 @@
+{"event":"messages.upsert","instance":"instancia-pesquisa","data":{"key":{"remoteJid":"5561999990099@s.whatsapp.net","fromMe":false,"id":"TEST001"},"message":{"conversation":"Ola teste local"},"messageType":"conversation","messageTimestamp":1234567890,"pushName":"Teste"}}

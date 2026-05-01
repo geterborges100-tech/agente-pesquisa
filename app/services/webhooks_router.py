@@ -47,15 +47,11 @@ def _build_ai_engine(db: Session) -> AIEngine | None:
     evolution_instance = os.environ.get("EVOLUTION_INSTANCE", "Provedor_CRM")
 
     if not anthropic_key:
-        logger.warning(
-            "[webhooks_router] ANTHROPIC_API_KEY não definida — AIEngine desabilitado."
-        )
+        logger.warning("[webhooks_router] ANTHROPIC_API_KEY não definida — AIEngine desabilitado.")
         return None
 
     if not evolution_base:
-        logger.warning(
-            "[webhooks_router] EVOLUTION_BASE_URL não definida — AIEngine desabilitado."
-        )
+        logger.warning("[webhooks_router] EVOLUTION_BASE_URL não definida — AIEngine desabilitado.")
         return None
 
     try:

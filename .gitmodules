@@ -1,0 +1,3 @@
+[submodule "timetracker"]
+	path = timetracker
+	url = https://github.com/DRYTRIX/TimeTracker

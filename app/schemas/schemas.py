@@ -7,10 +7,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
-
 
 # ---------------------------------------------------------------------------
 # Contact
@@ -22,19 +21,19 @@ class ContactResponse(BaseModel):
 
     id: uuid.UUID
     external_user_id: str
-    username: Optional[str] = None
-    full_name: Optional[str] = None
+    username: str | None = None
+    full_name: str | None = None
     consent_status: str
-    segment: Optional[str] = None
-    lead_score: Optional[float] = None
+    segment: str | None = None
+    lead_score: float | None = None
     created_at: datetime
     updated_at: datetime
 
 
 class ContactUpdate(BaseModel):
-    segment: Optional[str] = None
-    lead_score: Optional[float] = None
-    profile_summary: Optional[str] = None
+    segment: str | None = None
+    lead_score: float | None = None
+    profile_summary: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -49,10 +48,10 @@ class ConversationResponse(BaseModel):
     contact_id: uuid.UUID
     channel: str
     status: str
-    current_node_key: Optional[str] = None
+    current_node_key: str | None = None
     started_at: datetime
     last_message_at: datetime
-    ended_at: Optional[datetime] = None
+    ended_at: datetime | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +66,7 @@ class MessageResponse(BaseModel):
     conversation_id: uuid.UUID
     direction: str
     sender_type: str
-    raw_text: Optional[str] = None
+    raw_text: str | None = None
     sent_at: datetime
 
 
@@ -82,8 +81,8 @@ class SendMessageRequest(BaseModel):
 
 
 class HandoffRequest(BaseModel):
-    reason: Optional[str] = None
-    assigned_to: Optional[str] = None
+    reason: str | None = None
+    assigned_to: str | None = None
 
 
 class HandoffResponse(BaseModel):
@@ -91,11 +90,11 @@ class HandoffResponse(BaseModel):
 
     id: uuid.UUID
     conversation_id: uuid.UUID
-    reason: Optional[str] = None
+    reason: str | None = None
     status: str
-    assigned_to: Optional[str] = None
+    assigned_to: str | None = None
     created_at: datetime
-    resolved_at: Optional[datetime] = None
+    resolved_at: datetime | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -108,7 +107,7 @@ class ResearchScriptResponse(BaseModel):
 
     id: uuid.UUID
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     objective: str
     status: str
     created_at: datetime
@@ -117,7 +116,7 @@ class ResearchScriptResponse(BaseModel):
 
 class ResearchScriptCreate(BaseModel):
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     objective: str
 
 

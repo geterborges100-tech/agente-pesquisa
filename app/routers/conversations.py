@@ -6,7 +6,6 @@ Endpoints de Conversations — alinhado com openapi_v1.yaml.
 from __future__ import annotations
 
 import uuid
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
@@ -14,12 +13,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.extended_models import Handoff, Message
+from app.models.extended_models import Message
 from app.models.models_v1 import Conversation
 from app.schemas.schemas import (
     ConversationResponse,
     HandoffRequest,
-    HandoffResponse,
     MessageResponse,
     PaginatedConversations,
     SendMessageRequest,
@@ -30,7 +28,7 @@ router = APIRouter(prefix="/conversations", tags=["Conversations"])
 
 @router.get("", response_model=PaginatedConversations)
 def list_conversations(
-    status_filter: Optional[str] = Query(None, alias="status"),
+    status_filter: str | None = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -68,11 +66,7 @@ def list_messages(
     if conv is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversa não encontrada.")
 
-    stmt = (
-        select(Message)
-        .where(Message.conversation_id == conversation_id)
-        .order_by(Message.sent_at.asc())
-    )
+    stmt = select(Message).where(Message.conversation_id == conversation_id).order_by(Message.sent_at.asc())
     messages = db.scalars(stmt).all()
     return [MessageResponse.model_validate(m) for m in messages]
 
@@ -120,6 +114,7 @@ def close_conversation(
 
     conv.status = "closed"
     from datetime import datetime, timezone
+
     conv.ended_at = datetime.now(tz=timezone.utc)
     db.commit()
     db.refresh(conv)
