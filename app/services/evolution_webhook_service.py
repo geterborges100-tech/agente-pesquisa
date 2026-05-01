@@ -31,7 +31,7 @@ LGPD_MESSAGE = (
     "Ola! Antes de continuar, preciso do seu consentimento para processar seus dados "
     "conforme a LGPD. Voce concorda? Responda *sim* para aceitar ou *nao* para recusar."
 )
-CONSENT_DENIED_MESSAGE = "Entendido. Seus dados nao serao processados. Ate logo!"
+CONSENT_DENIED_MESSAGE = "Consentimento negado. Conversa encerrada. Obrigado!"
 CONSENT_GRANTED_MESSAGE = "Obrigado! Consentimento registrado. Como posso ajudar?"
 
 
