@@ -178,11 +178,11 @@ class EvolutionWebhookService:
                 if consent_result is not None:
                     status = consent_result.get("status")
                     if status == "awaiting_consent":
-                        self._send(msg.sender_phone, LGPD_MESSAGE)
+                        self._send(msg.sender_phone, LGPD_MESSAGE, conversation.id)
                     elif status == "consent_denied":
-                        self._send(msg.sender_phone, CONSENT_DENIED_MESSAGE)
+                        self._send(msg.sender_phone, CONSENT_DENIED_MESSAGE, conversation.id)
                     elif status == "consent_granted":
-                        self._send(msg.sender_phone, CONSENT_GRANTED_MESSAGE)
+                        self._send(msg.sender_phone, CONSENT_GRANTED_MESSAGE, conversation.id)
                     return {**consent_result, "message_id": msg.external_message_id}
 
                 if self._ai_engine is not None:
@@ -195,7 +195,7 @@ class EvolutionWebhookService:
                         )
                         outbound_text = result.get("outbound_text")
                         if outbound_text:
-                            self._send(msg.sender_phone, outbound_text)
+                            self._send(msg.sender_phone, outbound_text, conversation.id)
                     except Exception as ai_exc:
                         logger.exception("[Evolution] AIEngine falhou: %s", ai_exc)
                 else:
