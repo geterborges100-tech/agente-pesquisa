@@ -8,3 +8,4 @@ venv/
 *.log
 ssh-key-*
 local/
+.aider*
