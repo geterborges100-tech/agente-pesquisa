@@ -139,7 +139,7 @@ class EvolutionWebhookService:
         self._ai_engine = ai_engine
         self._outbound = EvolutionOutboundClient()
 
-    def _send(self, number: str, text: str) -> None:
+    def _send(self, number: str, text: str, conversation_id=None) -> None:
         try:
             self._outbound.send_text(number=number, text=text)
         except Exception as exc:
