@@ -51,7 +51,7 @@ def get_evolution_service(db: Session = Depends(get_db)) -> EvolutionWebhookServ
 @router.post("/evolution/whatsapp", status_code=status.HTTP_200_OK)
 async def receive_evolution_webhook(
     request: Request,
-    apikey: str | None = Header(None, alias="x-app-secret"),
+    apikey: str | None = Header(None, alias="apikey"),
     evolution_service: EvolutionWebhookService = Depends(get_evolution_service),
 ) -> JSONResponse:
     try:
