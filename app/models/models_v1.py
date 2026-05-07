@@ -99,17 +99,24 @@ class NodeType(str, Enum):
     WRITER = "writer"
     VALIDATOR = "validator"
     ROUTER = "router"
+    QUESTION = "question"
+    STATEMENT = "statement"
+    BRANCH = "branch"
+    END = "end"
 
 
 class Node(BaseModel):
     id: str
     type: NodeType
     content: str | None = None
+    next: str | None = None
     metadata: dict | None = None
 
 
 class ConversationStatus(str, Enum):
     OPEN = "open"
+    ACTIVE = "active"
+    WAITING = "waiting"
     CLOSED = "closed"
     WAITING_CONSENT = "waiting_consent"
     ARCHIVED = "archived"

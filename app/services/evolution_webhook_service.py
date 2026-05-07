@@ -21,6 +21,7 @@ from app.repositories.contact_repository import ContactRepository
 from app.services.conversation_service import ConversationService
 from app.services.evolution_outbound import EvolutionOutboundClient
 from app.services.guardrail_validator import GuardrailValidator
+from app.services.script_loader import NoActiveScriptError, ScriptLoader
 
 if TYPE_CHECKING:
     from app.services.ai_engine import AIEngine
@@ -187,11 +188,34 @@ class EvolutionWebhookService:
 
                 if self._ai_engine is not None:
                     try:
+                        # ---- Carregar roteiro ativo (ScriptLoader) ----
+                        script = {}
+                        try:
+                            loader = ScriptLoader(self._db)
+                            contact_obj = self._db.get(Contact, contact_id)
+                            if contact_obj:
+                                loaded = loader.load_active(contact_obj.account_id)
+                                script = {
+                                    "nodes": {
+                                        key: {
+                                            "id": key,
+                                            "type": node.node_type,
+                                            "content": node.text,
+                                            "next": node.next_key,
+                                        }
+                                        for key, node in loaded.nodes.items()
+                                    },
+                                    "start_node": loaded.start_node_key,
+                                }
+                        except NoActiveScriptError:
+                            pass  # modo livre
+                        # ---- Fim ScriptLoader ----
+
                         result = await self._ai_engine.process_inbound(
                             db=self._db,
                             conversation=conversation,
                             message_text=msg.raw_text,
-                            script={},
+                            script=script,
                         )
                         outbound_text = result.get("outbound_text")
                         if outbound_text:

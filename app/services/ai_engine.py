@@ -30,15 +30,18 @@ class AIEngine:
                 return await self._free_chat(db, conversation, message_text)
 
             current_node_data = nodes[current_node_key]
-            current_node = Node(key=current_node_key, **current_node_data)
+            current_node = Node(**current_node_data)
             next_status, next_node_key = self._advance(conversation, current_node)
-            outbound_text = current_node.text or "Entendido! Vamos continuar."
-            logger.info(f"[AIEngine] Estado: node={next_node_key or 'none'} status={next_status.value}")
+            db.commit()
+            outbound_text = current_node.content or "Entendido! Vamos continuar."
+            logger.info(
+                f"[AIEngine] Estado: node={next_node_key or 'none'} status={next_status if isinstance(next_status, str) else next_status.value}"
+            )
             return {
                 "status": "ok",
-                "node_key": current_node.key,
+                "node_key": current_node.id,
                 "next_node_key": next_node_key,
-                "conv_status": next_status.value,
+                "conv_status": next_status if isinstance(next_status, str) else next_status.value,
                 "outbound_text": outbound_text,
             }
         except Exception as e:
@@ -76,18 +79,24 @@ class AIEngine:
 
     def _advance(self, conversation: Conversation, current_node: Node) -> tuple[ConversationStatus, str | None]:
         current_status = ConversationStatus(conversation.status)
-        if current_node.node_type == NodeType.QUESTION:
-            conversation.current_node_key = current_node.key
-            new_status = StateMachine.transition(current_status, ConversationStatus.WAITING)
-            conversation.status = new_status
-            return new_status, current_node.key
-        elif current_node.node_type == NodeType.STATEMENT and current_node.next_key:
-            conversation.current_node_key = current_node.next_key
-            new_status = StateMachine.transition(current_status, ConversationStatus.ACTIVE)
-            conversation.status = new_status
-            return new_status, current_node.next_key
+        if current_node.type == NodeType.QUESTION:
+            conversation.current_node_key = current_node.next
+            if current_status != ConversationStatus.ACTIVE:
+                new_status = StateMachine.transition(current_status, ConversationStatus.ACTIVE)
+                conversation.status = new_status.value if hasattr(new_status, "value") else new_status
+            else:
+                new_status = current_status
+            return new_status, current_node.id
+        elif current_node.type == NodeType.STATEMENT and current_node.next:
+            conversation.current_node_key = current_node.next
+            if current_status != ConversationStatus.ACTIVE:
+                new_status = StateMachine.transition(current_status, ConversationStatus.ACTIVE)
+                conversation.status = new_status.value if hasattr(new_status, "value") else new_status
+            else:
+                new_status = current_status
+            return new_status, current_node.next
         else:
             conversation.current_node_key = None
             new_status = StateMachine.transition(current_status, ConversationStatus.CLOSED)
-            conversation.status = new_status
+            conversation.status = new_status.value if hasattr(new_status, "value") else new_status
             return new_status, None
